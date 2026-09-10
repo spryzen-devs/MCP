@@ -1,13 +1,18 @@
-import { Server } from 'lucide-react';
+import { Server, ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { McpServer } from '../types';
 
 export default function MCPConnectionItem({ server }: { server: McpServer }) {
-  const { selectedServerId, setSelectedServerId } = useStore();
+  const { selectedServerId, setSelectedServerId, trustRegistry } = useStore();
   const isSelected = selectedServerId === server.id;
 
+  // Map UI server ID to sentinel server ID
+  const sentinelId = server.id === 'server-calc' ? 'calculator' : server.id === 'server-email' ? 'email' : null;
+  const serverTrust = sentinelId && trustRegistry?.servers?.[sentinelId];
+  const trustStatus = serverTrust?.status;
+
   return (
-    <div 
+    <div
       className="flex flex-col"
       style={{
         padding: '12px',
@@ -33,15 +38,48 @@ export default function MCPConnectionItem({ server }: { server: McpServer }) {
           </div>
           <span className="font-medium text-sm">{server.name}</span>
         </div>
-        
+
         {/* Status Indicator */}
         <div className="flex items-center" style={{ gap: '6px' }}>
-          <span className="text-xs text-tertiary">
-            {server.status === 'connected' ? `${server.tools.length} tools` : server.status}
-          </span>
+          {server.status === 'connected' && trustStatus && (
+            <TrustIndicator status={trustStatus} />
+          )}
+          {server.status !== 'connected' && (
+            <span className="text-xs text-tertiary">{server.status}</span>
+          )}
           <span className={`status-dot status-${server.status}`}></span>
         </div>
       </div>
     </div>
   );
+}
+
+function TrustIndicator({ status }: { status: string }) {
+  switch (status) {
+    case 'trusted':
+      return (
+        <div className="flex items-center" style={{ gap: '3px' }}>
+          <ShieldCheck size={12} style={{ color: 'var(--status-connected)' }} />
+          <span className="text-xs" style={{ color: 'var(--status-connected)' }}>Verified</span>
+        </div>
+      );
+    case 'suspended':
+    case 'mutation_detected':
+      return (
+        <div className="flex items-center" style={{ gap: '3px' }}>
+          <ShieldAlert size={12} style={{ color: 'var(--sentinel-warning)' }} />
+          <span className="text-xs" style={{ color: 'var(--sentinel-warning)' }}>Integrity Change</span>
+        </div>
+      );
+    case 'pending_approval':
+    case 'discovered':
+      return (
+        <div className="flex items-center" style={{ gap: '3px' }}>
+          <Shield size={12} style={{ color: 'var(--text-tertiary)' }} />
+          <span className="text-xs text-tertiary">Pending</span>
+        </div>
+      );
+    default:
+      return null;
+  }
 }

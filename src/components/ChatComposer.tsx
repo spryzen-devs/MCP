@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Paperclip, Wrench, ArrowUp, ChevronDown, Loader2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { calculateExpression, sendMockEmail, readMockEmails } from '../services/chat-api';
+import { calculateExpression, sendMockEmail, readMockEmails, searchDocuments } from '../services/chat-api';
 
 export default function ChatComposer() {
   const [input, setInput] = useState('');
   const [showTools, setShowTools] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { addMessage, updateConversationHistory, activeConversationId, createNewConversation, mcpServers, conversations } = useStore();
+  const { addMessage, activeConversationId, createNewConversation, mcpServers } = useStore();
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -17,8 +17,6 @@ export default function ChatComposer() {
       convId = createNewConversation();
     }
     
-    const conversation = conversations.find(c => c.id === convId) || { backendHistory: [] };
-
     addMessage(convId, {
       id: `msg-${Date.now()}`,
       role: 'user',
@@ -35,8 +33,14 @@ export default function ChatComposer() {
       const calcMatch = userPrompt.trim().match(/^Calculate\s+(.+)$/i);
       const emailMatch = userPrompt.trim().match(/^Email\s+to:\s+(.+?)\s+subject:\s+(.+?)\s+body:\s+(.+)$/i);
       const readEmailsMatch = userPrompt.trim().match(/^Read emails$/i);
+      const searchMatch = userPrompt.trim().match(/^Search documents\s+(.+)$/i);
       
       if (calcMatch) {
+        const calcServer = mcpServers.find(s => s.id === 'server-calc');
+        if (!calcServer || calcServer.status !== 'connected') {
+          throw new Error('Calculator MCP server is not connected. Please connect it first.');
+        }
+
         const expression = calcMatch[1].trim();
         const response = await calculateExpression(expression);
         
@@ -56,6 +60,11 @@ export default function ChatComposer() {
           }]
         });
       } else if (emailMatch) {
+        const emailServer = mcpServers.find(s => s.id === 'server-email');
+        if (!emailServer || emailServer.status !== 'connected') {
+          throw new Error('Email MCP server is not connected. Please connect it first.');
+        }
+
         const to = emailMatch[1].trim();
         const subject = emailMatch[2].trim();
         const body = emailMatch[3].trim();
@@ -78,6 +87,11 @@ export default function ChatComposer() {
           }]
         });
       } else if (readEmailsMatch) {
+        const emailServer = mcpServers.find(s => s.id === 'server-email');
+        if (!emailServer || emailServer.status !== 'connected') {
+          throw new Error('Email MCP server is not connected. Please connect it first.');
+        }
+
         const response = await readMockEmails();
         let content = '';
         if (response.success && response.result) {
@@ -108,6 +122,40 @@ export default function ChatComposer() {
             toolName: 'read',
             status: response.success ? 'completed' : 'failed',
             arguments: {},
+            result: response.result,
+            error: response.error
+          }]
+        });
+      } else if (searchMatch) {
+        const searchServer = mcpServers.find(s => s.id === 'server-docsearch');
+        if (!searchServer || searchServer.status !== 'connected') {
+          throw new Error('Document Search MCP server is not connected. Please connect it first.');
+        }
+
+        const query = searchMatch[1].trim();
+        const response = await searchDocuments(query);
+        
+        let displayContent = '';
+        if (response.success) {
+          displayContent = `**SEARCH RESULTS**\n\n${response.result}`;
+        } else {
+          displayContent = `Failed to search documents:\n${response.error}`;
+          if (response.injectionBlocked) {
+            displayContent = `🚨 **SECURITY BLOCK** 🚨\n\n${response.error}`;
+          }
+        }
+        
+        addMessage(convId, {
+          id: `msg-${Date.now()}`,
+          role: 'assistant',
+          content: displayContent,
+          timestamp: Date.now(),
+          toolsUsed: [{
+            id: `tool-${Date.now()}`,
+            serverName: 'documentsearch',
+            toolName: 'search_documents',
+            status: response.success ? 'completed' : 'failed',
+            arguments: { query },
             result: response.result,
             error: response.error
           }]

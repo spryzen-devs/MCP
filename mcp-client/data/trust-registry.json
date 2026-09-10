@@ -1,0 +1,173 @@
+{
+  "servers": {
+    "calculator": {
+      "serverId": "calculator",
+      "serverName": "Calculator MCP",
+      "status": "code_mutation_detected",
+      "tools": {
+        "calculator.evaluate": {
+          "toolName": "calculator.evaluate",
+          "manifestHash": "ec0d6ab01ba965e2ec33bda739ef674f806d51f2190af0b5e0a4f082eb04d780",
+          "canonicalManifest": {
+            "server": "calculator",
+            "tool": "calculator.evaluate",
+            "name": "calculator.evaluate",
+            "description": "Evaluate a mathematical expression.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "expression": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "expression"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            }
+          },
+          "approvedAt": "2026-09-10T21:32:58.998Z",
+          "approvedBy": "admin",
+          "previousHashes": []
+        }
+      },
+      "currentManifests": {
+        "calculator.evaluate": {
+          "server": "calculator",
+          "tool": "calculator.evaluate",
+          "name": "calculator.evaluate",
+          "description": "Evaluate a mathematical expression.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "expression": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "expression"
+            ],
+            "additionalProperties": false,
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          }
+        }
+      },
+      "approvedUpdateCount": 0,
+      "codeHash": "8ac75e04d46d63e579238ae44709825b4d482c0bd023d71d563d2cafd3b5b213",
+      "serverHash": "93effe45b7e5104609fcb160bce6be1055c6895569b35aaf484f1edeab5b507d",
+      "lastMutation": "2026-09-10T23:41:11.088Z",
+      "lastVerified": "2026-09-10T21:54:33.413Z",
+      "approvedAt": "2026-09-10T21:32:59.005Z"
+    },
+    "email": {
+      "serverId": "email",
+      "serverName": "Email MCP",
+      "status": "trusted",
+      "tools": {
+        "email.send": {
+          "toolName": "email.send",
+          "manifestHash": "5f0bcdcfe1957b3e391a2b7a2c1bf48a7046b013bff37aca0407ce2c56c8416b",
+          "canonicalManifest": {
+            "server": "email",
+            "tool": "email.send",
+            "name": "email.send",
+            "description": "Send an email. This is a MOCK email tool. It does NOT actually send email.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "to": {
+                  "type": "string",
+                  "description": "The recipient email address"
+                },
+                "subject": {
+                  "type": "string",
+                  "description": "The subject of the email"
+                },
+                "body": {
+                  "type": "string",
+                  "description": "The body content of the email"
+                }
+              },
+              "required": [
+                "to",
+                "subject",
+                "body"
+              ]
+            }
+          },
+          "approvedAt": "2026-09-10T21:33:47.377Z",
+          "approvedBy": "admin",
+          "previousHashes": []
+        },
+        "email.read": {
+          "toolName": "email.read",
+          "manifestHash": "4886c63c04eaf40f3d8394f53d8757ac961dfd2aae7311550ff43025ccd01a6b",
+          "canonicalManifest": {
+            "server": "email",
+            "tool": "email.read",
+            "name": "email.read",
+            "description": "Read recent emails. This is a MOCK email tool. It returns fake emails.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          },
+          "approvedAt": "2026-09-10T21:33:47.378Z",
+          "approvedBy": "admin",
+          "previousHashes": []
+        }
+      },
+      "currentManifests": {
+        "email.send": {
+          "server": "email",
+          "tool": "email.send",
+          "name": "email.send",
+          "description": "Send an email. This is a MOCK email tool. It does NOT actually send email.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "to": {
+                "type": "string",
+                "description": "The recipient email address"
+              },
+              "subject": {
+                "type": "string",
+                "description": "The subject of the email"
+              },
+              "body": {
+                "type": "string",
+                "description": "The body content of the email"
+              }
+            },
+            "required": [
+              "to",
+              "subject",
+              "body"
+            ]
+          }
+        },
+        "email.read": {
+          "server": "email",
+          "tool": "email.read",
+          "name": "email.read",
+          "description": "Read recent emails. This is a MOCK email tool. It returns fake emails.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      "approvedUpdateCount": 0,
+      "codeHash": "3dc83b8da953a766315ad3b2af2d58b96d3eb6c9b5406c19239d4252bbe9d3f5",
+      "serverHash": "01fa5b01303898bd0e4afa4a6afa8f10e787b562d1dd7b197c8c8f0c8a29b98f",
+      "approvedAt": "2026-09-10T21:33:47.384Z",
+      "lastVerified": "2026-09-10T21:53:00.685Z",
+      "lastMutation": "2026-09-10T21:52:49.120Z"
+    }
+  }
+}

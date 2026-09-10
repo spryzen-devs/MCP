@@ -2,6 +2,8 @@ import { GeminiClient } from '../gemini/gemini-client.js';
 import { McpClientManager } from '../mcp-client.js';
 import { ToolRegistry } from './tool-registry.js';
 import { Content, Part } from '@google/genai';
+import { auditLogger } from '../server.js';
+import { IndirectInjectionDetector, UntrustedToolResult } from '../sentinel/indirect-injection-detector.js';
 
 export class AgentLoop {
   private gemini: GeminiClient;
@@ -93,12 +95,55 @@ export class AgentLoop {
         } else {
           console.log(`[MCP] Result received.`);
           const resultText = mcpResult.content.map((c: any) => c.text).join(' ');
-          toolResponsesParts.push({
-            functionResponse: {
-              name: functionName,
-              response: { result: resultText }
+          
+          // PHASE 6: Establish Untrusted Data Boundary
+          const untrustedData: UntrustedToolResult = {
+            provenance: 'tool_result/untrusted',
+            serverId: toolInfo.serverId,
+            toolName: toolInfo.name,
+            content: resultText
+          };
+
+          // PHASE 3: Run Indirect Prompt Injection Detection
+          const detection = IndirectInjectionDetector.analyze(
+            untrustedData.toolName, 
+            untrustedData.serverId, 
+            untrustedData.content
+          );
+
+          if (detection.hasInjection) {
+            console.warn(`[SENTINEL] INDIRECT PROMPT INJECTION DETECTED in ${toolInfo.serverId} -> ${toolInfo.name}`);
+            
+            // PHASE 5: Log findings
+            for (const finding of detection.findings) {
+              console.warn(`\n--------------------------------------------------`);
+              console.warn(`⚠ INDIRECT PROMPT INJECTION DETECTED`);
+              console.warn(`Source:   ${finding.source}`);
+              console.warn(`Category: ${finding.category}`);
+              console.warn(`Evidence: ${finding.evidence}`);
+              console.warn(`Risk:     ${finding.risk}`);
+              console.warn(`Reason:   ${finding.reason}`);
+              console.warn(`Decision: ${finding.decision}`);
+              console.warn(`--------------------------------------------------\n`);
+
+              auditLogger.record('INDIRECT_PROMPT_INJECTION_DETECTED', toolInfo.serverId, toolInfo.name, finding as unknown as Record<string, unknown>);
             }
-          });
+
+            // Block the payload from reaching the agent
+            toolResponsesParts.push({
+              functionResponse: {
+                name: functionName,
+                response: { error: `Security policy blocked this tool response due to suspicious instruction injection (Risk: HIGH).` }
+              }
+            });
+          } else {
+            toolResponsesParts.push({
+              functionResponse: {
+                name: functionName,
+                response: { result: resultText }
+              }
+            });
+          }
         }
       }
 

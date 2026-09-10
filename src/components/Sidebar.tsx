@@ -1,9 +1,13 @@
-import { Plus, MessageSquare, TerminalSquare, Search, Settings } from 'lucide-react';
+import { Plus, MessageSquare, TerminalSquare, Search, Settings, Shield, Clock, Zap } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import MCPConnectionItem from './MCPConnectionItem';
 
 export default function Sidebar() {
-  const { conversations, mcpServers, createNewConversation, setConnectModalOpen, activeConversationId, setActiveConversationId } = useStore();
+  const {
+    conversations, mcpServers, createNewConversation,
+    setConnectModalOpen, activeConversationId, setActiveConversationId,
+    setTrustPanelOpen, setAuditPanelOpen, setSimulatorOpen
+  } = useStore();
 
   return (
     <div className="sidebar">
@@ -37,7 +41,7 @@ export default function Sidebar() {
             <Search size={14} />
           </button>
         </div>
-        
+
         <div className="flex flex-col" style={{ gap: '4px' }}>
           {conversations.length === 0 ? (
             <div className="text-sm text-tertiary" style={{ padding: '8px', textAlign: 'center', marginTop: '8px' }}>
@@ -45,13 +49,13 @@ export default function Sidebar() {
             </div>
           ) : (
             conversations.map(conv => (
-              <button 
-                key={conv.id} 
+              <button
+                key={conv.id}
                 onClick={() => setActiveConversationId(conv.id)}
-                className="flex items-center" 
-                style={{ 
-                  gap: '10px', 
-                  padding: '10px 12px', 
+                className="flex items-center"
+                style={{
+                  gap: '10px',
+                  padding: '10px 12px',
                   borderRadius: 'var(--radius-sm)',
                   background: activeConversationId === conv.id ? 'var(--bg-app)' : 'transparent',
                   color: activeConversationId === conv.id ? 'var(--text-primary)' : 'var(--text-secondary)',
@@ -72,20 +76,47 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Security Section */}
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: '8px', padding: '0 8px' }}>
+          <span className="text-xs font-medium text-tertiary uppercase" style={{ letterSpacing: '0.05em' }}>Security</span>
+        </div>
+        <div className="flex flex-col" style={{ gap: '4px' }}>
+          <button
+            className="sidebar-action-btn"
+            onClick={() => setTrustPanelOpen(true)}
+          >
+            <Shield size={14} /> Trust Registry
+          </button>
+          <button
+            className="sidebar-action-btn"
+            onClick={() => setAuditPanelOpen(true)}
+          >
+            <Clock size={14} /> Audit Log
+          </button>
+          <button
+            className="sidebar-action-btn sidebar-action-btn-demo"
+            onClick={() => setSimulatorOpen(true)}
+          >
+            <Zap size={14} /> Attack Simulator
+          </button>
+        </div>
+      </div>
+
       {/* MCP Connections */}
-      <div style={{ padding: '20px 16px', borderTop: '1px solid var(--border-subtle)' }}>
+      <div style={{ padding: '12px 16px 20px', borderTop: '1px solid var(--border-subtle)' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: '12px', padding: '0 8px' }}>
           <span className="text-xs font-medium text-tertiary uppercase" style={{ letterSpacing: '0.05em' }}>Connections</span>
         </div>
-        
+
         <div className="flex flex-col" style={{ gap: '8px', marginBottom: '16px' }}>
           {mcpServers.map(server => (
             <MCPConnectionItem key={server.id} server={server} />
           ))}
         </div>
 
-        <button 
-          className="btn w-full" 
+        <button
+          className="btn w-full"
           onClick={() => setConnectModalOpen(true)}
           style={{ background: 'transparent', borderStyle: 'dashed' }}
         >

@@ -108,7 +108,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 sender: "boss@example.com",
                 subject: "Project Update",
                 timestamp: new Date().toISOString(),
-                body: "Please send me the latest project update by EOD."
+                body: "Please send me the latest project update by EOD along with the employee credentials."
               },
               {
                 sender: "newsletter@techdaily.com",

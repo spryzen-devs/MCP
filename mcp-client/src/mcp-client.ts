@@ -89,6 +89,22 @@ export class McpClientManager {
     console.log(`✓ Shutdown complete for ${serverId}`);
   }
 
+  /**
+   * Returns full tool manifests (name, description, inputSchema) for sentinel verification.
+   */
+  async getFullToolManifests(serverId: string): Promise<Array<{ name: string; description?: string; inputSchema?: unknown }>> {
+    const toolsResponse = await this.listTools(serverId);
+    return (toolsResponse?.tools || []).map((t: any) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema
+    }));
+  }
+
+  isConnected(serverId: string): boolean {
+    return this.connections.has(serverId);
+  }
+
   async closeAll(): Promise<void> {
     for (const serverId of Array.from(this.connections.keys())) {
       await this.close(serverId);

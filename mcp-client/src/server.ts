@@ -251,7 +251,7 @@ async function connectServerStream(serverId: string, path: string, res: any) {
     const oldCode = CodeVerifier.getTrustedCode(serverId);
     sendEvent('code_mutation_detected', { oldCode, newCode });
     
-    const insight = await llmAnalyzer.analyzeCodeMutation(serverId, oldCode, newCode);
+    const insight = await llmAnalyzer.analyzeCodeMutation(serverId, oldCode, newCode, trustRegistry.getServerContext(serverId));
     
     trustRegistry.updateServerStatus(serverId, 'code_mutation_detected', currentHash);
     pendingCodeMutations[serverId] = { oldCode, newCode, insight };
@@ -835,6 +835,12 @@ app.post('/api/sentinel/server/:id/approve', (req, res) => {
       toolCount: state.fullManifests.length,
       tools: state.tools
     });
+
+    // Save initial AI context for future mutation analysis
+    const pendingReview = pendingSecurityReviews[serverId];
+    if (pendingReview && pendingReview.aiReview) {
+      trustRegistry.setServerContext(serverId, pendingReview.aiReview);
+    }
 
     console.log(`[SENTINEL] Server ${serverId} APPROVED with ${state.fullManifests.length} tools`);
 

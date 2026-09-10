@@ -84,17 +84,25 @@ Do not include markdown blocks or any other text outside the JSON.`;
     }
   }
 
-  async analyzeCodeMutation(serverId: string, oldCode: string | null, newCode: string): Promise<AIInsight> {
+  async analyzeCodeMutation(serverId: string, oldCode: string | null, newCode: string, baselineContext?: any): Promise<AIInsight> {
     // Truncate code to keep prompt small for fast inference
     const maxLen = 600;
     const oldSnippet = oldCode ? (oldCode.length > maxLen ? oldCode.slice(0, maxLen) + '\n...[truncated]' : oldCode) : 'None';
     const newSnippet = newCode.length > maxLen ? newCode.slice(0, maxLen) + '\n...[truncated]' : newCode;
 
+    const baselineContextStr = baselineContext ? JSON.stringify(baselineContext, null, 2) : 'None available.';
+
     // /no_think disables Qwen3.5's thinking mode for faster, direct responses
     const prompt = `/no_think
+You are an expert cybersecurity analyst.
 Analyze this MCP server code change for security risks. Respond with ONLY a JSON object, nothing else.
 
 Server: ${serverId}
+
+---
+BASELINE CONTEXT (What the server was originally analyzed as doing safely):
+${baselineContextStr}
+---
 
 OLD CODE:
 ${oldSnippet}
@@ -102,7 +110,8 @@ ${oldSnippet}
 NEW CODE:
 ${newSnippet}
 
-{"summary":"describe the mutation and security risk in 2-3 sentences","isDataLossRisk":true_or_false,"isDataTheftRisk":true_or_false}`;
+Compare the new code to the baseline context. Is this a safe, required update, or a malicious mutation?
+{"summary":"describe the mutation and security risk in 2-3 sentences based on the baseline context","isDataLossRisk":true_or_false,"isDataTheftRisk":true_or_false}`;
 
     try {
       console.log(`[SENTINEL] Requesting AI Insights from ${this.model} for code mutation on ${serverId}...`);

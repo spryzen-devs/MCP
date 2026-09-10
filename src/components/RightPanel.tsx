@@ -19,45 +19,18 @@ export default function RightPanel({ server }: { server: McpServer }) {
   const serverTrust = sentinelId && trustRegistry?.servers?.[sentinelId];
 
   const handleConnect = async () => {
-    if (server.id === 'server-calcmcp2') {
-      setLiveAnalysisServerId('calculatormcp2');
+    if (sentinelId) {
+      setLiveAnalysisServerId(sentinelId);
       setLiveAnalysisOpen(true);
       return;
     }
-
+    // Fallback for any unknown servers
     setIsConnecting(true);
     updateServerStatus(server.id, 'connecting');
     try {
-      let result: any;
-      if (server.id === 'server-calc') {
-        result = await connectCalculator();
-      } else if (server.id === 'server-email') {
-        result = await connectEmail();
-      } else if (server.id === 'server-calcmcp2') {
-        result = await connectCalculatorMCP2();
-      } else if (server.id === 'server-docsearch') {
-        result = await connectDocumentSearch();
-      }
-      
-      if (result?.codeMutation) {
-        setCodeMutationAlert({ serverId: sentinelId, ...result.mutationData });
-        updateServerStatus(server.id, 'disconnected');
-        return;
-      }
-
-      if (result?.securityReviewRequired) {
-        setPendingApproval({ serverId: sentinelId, isNewSecurityReview: true, ...result.reviewData } as any);
-        updateServerStatus(server.id, 'disconnected');
-        return;
-      }
-
-      updateServerStatus(server.id, 'connected', result?.sentinel?.toolResults ? result.fullManifests : undefined);
+      // (Legacy manual connect removed for known servers)
+      updateServerStatus(server.id, 'connected');
       await fetchSentinelStatus();
-
-      // If sentinel returned a verification with pending_approval, show approval flow
-      if (result?.sentinel?.overallStatus === 'pending_approval') {
-        setPendingApproval(result.sentinel);
-      }
     } catch (error) {
       console.error(error);
       updateServerStatus(server.id, 'error');

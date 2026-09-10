@@ -59,6 +59,7 @@ export interface ServerRegistryEntry {
   status: TrustStatus;
   tools: Record<string, ToolBaseline>;
   currentManifests: Record<string, ToolManifest>;
+  aiContext?: any;
   approvedAt?: string;
   lastVerified?: string;
   lastMutation?: string;

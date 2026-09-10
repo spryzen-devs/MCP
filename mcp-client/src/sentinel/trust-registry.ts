@@ -106,6 +106,18 @@ export class TrustRegistry {
     }
   }
 
+  setServerContext(serverId: string, aiContext: any): void {
+    const server = this.data.servers[serverId];
+    if (server) {
+      server.aiContext = aiContext;
+      this.persist();
+    }
+  }
+
+  getServerContext(serverId: string): any | undefined {
+    return this.data.servers[serverId]?.aiContext;
+  }
+
   // ─── Tool Operations ──────────────────────────────────────────
 
   getToolBaseline(serverId: string, toolName: string): ToolBaseline | undefined {

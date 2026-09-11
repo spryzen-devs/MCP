@@ -243,6 +243,8 @@ export const useStore = create<AppState>((set, get) => ({
         trustRegistry: data.registry,
         pendingApproval: null
       });
+      // Update UI server status to connected
+      get().updateServerStatus(serverId, 'connected');
       // Refresh audit log
       get().fetchAuditLog();
     } catch (e) {

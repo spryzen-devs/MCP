@@ -152,10 +152,12 @@ export default function LiveAnalysisModal() {
                 style={{ backgroundColor: '#dc2626', color: 'white' }}
                 onClick={async () => {
                   const { useStore } = await import('../store/useStore');
-                  await useStore.getState().approveServer(
-                     liveAnalysisServerId === 'calculator' ? 'server-calc' : 
-                     liveAnalysisServerId === 'email' ? 'server-email' : 'server-calcmcp2'
-                  );
+                  const uiId = liveAnalysisServerId === 'calculator' ? 'server-calc' 
+                    : liveAnalysisServerId === 'email' ? 'server-email' 
+                    : liveAnalysisServerId === 'calculatormcp2' ? 'server-calcmcp2'
+                    : liveAnalysisServerId === 'documentsearch' ? 'server-docsearch'
+                    : liveAnalysisServerId;
+                  await useStore.getState().approveServer(uiId);
                   useStore.getState().fetchSentinelStatus();
                   setLiveAnalysisOpen(false);
                 }}

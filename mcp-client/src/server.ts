@@ -40,6 +40,15 @@ const verifier = new ManifestVerifier(trustRegistry);
 export const auditLogger = new AuditLogger();
 const attackSimulator = new AttackSimulator();
 
+// ─── Startup: Reset calculator & email so first connection triggers full analysis ──
+// This ensures the live dashboard shows code extraction + LLM analysis on first connect.
+// Subsequent connects within the same session will use hash comparison for mutation detection.
+const RESET_ON_STARTUP = ['calculator', 'email'];
+for (const sid of RESET_ON_STARTUP) {
+  trustRegistry.clearServer(sid);
+}
+console.log(`[SENTINEL] Trust registry cleared for [${RESET_ON_STARTUP.join(', ')}] — fresh analysis on first connect.`);
+
 // Helper to asynchronously fetch AI insights
 async function enrichWithAIInsights(serverId: string, serverName: string, verification: ServerVerificationResult) {
   if (verification.overallStatus === 'mutation_detected') {
@@ -243,7 +252,12 @@ async function connectServerStream(serverId: string, path: string, res: any) {
     );
     
     pendingSecurityReviews[serverId] = { staticFindings, aiReview, fingerprint: currentHash, rawTools: fullManifests };
-    await mcpClient.close(serverId);
+    
+    // Keep server connected so the approve endpoint can work
+    serversState[serverId].fullManifests = fullManifests;
+    serversState[serverId].tools = fullManifests.map(t => t.name);
+    serversState[serverId].connected = true;
+    trustRegistry.registerServer(serverId, SERVER_NAMES[serverId]);
     
     sendEvent('review_complete', { reviewData: pendingSecurityReviews[serverId] });
     res.end();
@@ -846,6 +860,23 @@ app.post('/api/sentinel/server/:id/approve', (req, res) => {
     if (pendingReview && pendingReview.aiReview) {
       trustRegistry.setServerContext(serverId, pendingReview.aiReview);
     }
+
+    // Save trusted code baseline + hash so subsequent connections use mutation detection
+    const serverPath = serverId === 'calculator' ? config.calculatorServerPath 
+      : serverId === 'email' ? config.emailServerPath 
+      : serverId === 'calculatormcp2' ? config.calculatorMCP2ServerPath 
+      : serverId === 'documentsearch' ? config.documentSearchServerPath 
+      : null;
+    
+    if (serverPath) {
+      const currentHash = CodeVerifier.getCodeHash(serverPath);
+      CodeVerifier.saveTrustedCode(serverId, serverPath);
+      trustRegistry.updateServerCodeBaseline(serverId, currentHash);
+      console.log(`[SENTINEL] Saved trusted code baseline for ${serverId} (hash: ${currentHash.substring(0, 12)}...)`);
+    }
+
+    // Clear pending review since it's been handled
+    delete pendingSecurityReviews[serverId];
 
     console.log(`[SENTINEL] Server ${serverId} APPROVED with ${state.fullManifests.length} tools`);
 

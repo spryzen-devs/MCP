@@ -250,8 +250,13 @@ async function connectServerStream(serverId: string, path: string, res: any) {
   } else if (currentHash !== baselineHash) {
     const oldCode = CodeVerifier.getTrustedCode(serverId);
     sendEvent('code_mutation_detected', { oldCode, newCode });
+    sendEvent('llm_started', {});
     
-    const insight = await llmAnalyzer.analyzeCodeMutation(serverId, oldCode, newCode, trustRegistry.getServerContext(serverId));
+    const insight = await llmAnalyzer.analyzeCodeMutation(
+      serverId, oldCode, newCode, 
+      trustRegistry.getServerContext(serverId),
+      (chunk) => sendEvent('llm_chunk', { chunk })
+    );
     
     trustRegistry.updateServerStatus(serverId, 'code_mutation_detected', currentHash);
     pendingCodeMutations[serverId] = { oldCode, newCode, insight };

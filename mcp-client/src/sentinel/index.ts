@@ -6,5 +6,10 @@ export { AttackSimulator, ATTACK_SCENARIOS } from './attack-simulator.js';
 export { detectCrossServerInstructions } from './cross-server-detector.js';
 export { canonicalize, hashManifest, toToolManifest } from './canonicalizer.js';
 export { diffManifests, categorizeMutations } from './diff-engine.js';
-export { IndirectInjectionDetector } from './indirect-injection-detector.js';
+
+export { markAsUntrusted } from './untrusted-boundary.js';
+export { TextExtractor } from './extractor.js';
+export { TextNormalizer } from './normalizer.js';
+export { RuleBasedDetector } from './detector.js';
+export { TextSanitizer } from './sanitizer.js';
 export * from './types.js';

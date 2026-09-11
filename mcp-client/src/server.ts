@@ -12,7 +12,11 @@ import {
   AttackSimulator,
   StaticAnalyzer,
   ATTACK_SCENARIOS,
-  IndirectInjectionDetector
+  markAsUntrusted,
+  TextExtractor,
+  TextNormalizer,
+  RuleBasedDetector,
+  TextSanitizer
 } from './sentinel/index.js';
 import { llmAnalyzer } from './sentinel/llm-analyzer.js';
 import { CodeVerifier } from './sentinel/code-verifier.js';
@@ -672,16 +676,15 @@ app.post('/api/mcp/calculator/calculate', async (req, res) => {
 
     console.log(`[MCP] Calling calculator.evaluate`);
     const mcpResult = await mcpClient.callTool('calculator', 'calculator.evaluate', { expression });
+    const untrustedResult = markAsUntrusted(mcpResult, 'calculator', 'calculator.evaluate');
+    const sanitizedResult = checkInjection(untrustedResult);
 
-    if (mcpResult.isError) {
-      const errText = mcpResult.content.map((c: any) => c.text).join(' ');
-      console.log(`[MCP] Tool error: ${errText}`);
-      return res.json({ success: false, tool: 'calculator.evaluate', expression, error: errText });
+    if (sanitizedResult.isError) {
+      const errText = sanitizedResult.sanitizedContent.content?.map((c: any) => c.text).join(' ') || String(sanitizedResult.sanitizedContent.error || sanitizedResult.sanitizedContent);
+      res.status(500).json({ error: errText });
+    } else {
+      res.json({ result: sanitizedResult.sanitizedContent });
     }
-
-    const resultText = mcpResult.content.map((c: any) => c.text).join(' ');
-    console.log(`[MCP] Result received: ${resultText}`);
-    return res.json({ success: true, tool: 'calculator.evaluate', expression, result: resultText });
 
   } catch (error: any) {
     console.error('Calculate error:', error);
@@ -714,14 +717,15 @@ app.post('/api/mcp/email/send', async (req, res) => {
     }
 
     const mcpResult = await mcpClient.callTool('email', 'email.send', { to, subject, body });
+    const untrustedResult = markAsUntrusted(mcpResult, 'email', 'email.send');
+    const sanitizedResult = checkInjection(untrustedResult);
 
-    if (mcpResult.isError) {
-      const errText = mcpResult.content.map((c: any) => c.text).join(' ');
-      return res.json({ success: false, tool: 'email.send', error: errText });
+    if (sanitizedResult.isError) {
+      const errText = sanitizedResult.sanitizedContent.content?.map((c: any) => c.text).join(' ') || String(sanitizedResult.sanitizedContent.error || sanitizedResult.sanitizedContent);
+      res.status(500).json({ error: errText });
+    } else {
+      res.json({ result: sanitizedResult.sanitizedContent });
     }
-
-    const resultText = mcpResult.content.map((c: any) => c.text).join(' ');
-    return res.json({ success: true, tool: 'email.send', result: resultText });
 
   } catch (error: any) {
     res.status(500).json({ success: false, tool: 'email.send', error: error.message });
@@ -745,14 +749,15 @@ app.post('/api/mcp/email/read', async (_req, res) => {
     }
 
     const mcpResult = await mcpClient.callTool('email', 'email.read', {});
+    const untrustedResult = markAsUntrusted(mcpResult, 'email', 'email.read');
+    const sanitizedResult = checkInjection(untrustedResult);
 
-    if (mcpResult.isError) {
-      const errText = mcpResult.content.map((c: any) => c.text).join(' ');
-      return res.json({ success: false, tool: 'email.read', error: errText });
+    if (sanitizedResult.isError) {
+      const errText = sanitizedResult.sanitizedContent.content?.map((c: any) => c.text).join(' ') || String(sanitizedResult.sanitizedContent.error || sanitizedResult.sanitizedContent);
+      res.status(500).json({ error: errText });
+    } else {
+      res.json({ result: sanitizedResult.sanitizedContent });
     }
-
-    const resultText = mcpResult.content.map((c: any) => c.text).join(' ');
-    return res.json({ success: true, tool: 'email.read', result: resultText });
 
   } catch (error: any) {
     res.status(500).json({ success: false, tool: 'email.read', error: error.message });
@@ -789,35 +794,18 @@ app.post('/api/mcp/documentsearch/search', async (req, res) => {
 
     console.log(`[MCP] Calling search_documents`);
     const mcpResult = await mcpClient.callTool('documentsearch', 'search_documents', { query });
+    const untrustedResult = markAsUntrusted(mcpResult, 'documentsearch', 'search_documents');
+    const sanitizedResult = checkInjection(untrustedResult);
 
-    if (mcpResult.isError) {
-      const errText = mcpResult.content.map((c: any) => c.text).join(' ');
+    if (sanitizedResult.isError) {
+      const errText = sanitizedResult.sanitizedContent.content?.map((c: any) => c.text).join(' ') || String(sanitizedResult.sanitizedContent.error || sanitizedResult.sanitizedContent);
       console.log(`[MCP] Tool error: ${errText}`);
       return res.json({ success: false, tool: 'search_documents', query, error: errText });
     }
 
-    const resultText = mcpResult.content.map((c: any) => c.text).join(' ');
+    const resultText = sanitizedResult.sanitizedContent.content?.map((c: any) => c.text).join(' ') || String(sanitizedResult.sanitizedContent);
     
-    // SENTINEL GATE: Check for Indirect Prompt Injection
-    const detection = IndirectInjectionDetector.analyze('search_documents', 'documentsearch', resultText);
-    
-    if (detection.hasInjection) {
-      console.warn(`[SENTINEL] INDIRECT PROMPT INJECTION DETECTED in documentsearch -> search_documents`);
-      
-      for (const finding of detection.findings) {
-        auditLogger.record('INDIRECT_PROMPT_INJECTION_DETECTED', 'documentsearch', 'search_documents', finding as unknown as Record<string, unknown>);
-      }
-      
-      return res.json({ 
-        success: false, 
-        tool: 'search_documents', 
-        query, 
-        error: 'Security policy blocked this tool response due to suspicious instruction injection (Risk: HIGH).',
-        injectionBlocked: true
-      });
-    }
-
-    console.log(`[MCP] Result received: ${resultText}`);
+    console.log(`[MCP] Result received.`);
     return res.json({ success: true, tool: 'search_documents', query, result: resultText });
 
   } catch (error: any) {
@@ -1000,7 +988,22 @@ app.get('/api/sentinel/audit-log', (_req, res) => {
   res.json({ entries: auditLogger.getAll() });
 });
 
-// ─── Attack Simulation ──────────────────────────────────────────
+function checkInjection(untrustedResult: any) {
+  const extracted = TextExtractor.extract(untrustedResult);
+  const normalized = TextNormalizer.normalizeAll(extracted);
+  const findings = RuleBasedDetector.detect(normalized);
+  
+  const sanitizedResult = TextSanitizer.sanitize(untrustedResult, findings);
+
+  if (findings.length > 0) {
+    console.log(`[SENTINEL] Indirect Prompt Injection Detected! Found ${findings.length} finding(s). Spans have been sanitized.`);
+    auditLogger.record('INDIRECT_PROMPT_INJECTION_DETECTED', untrustedResult.serverId, untrustedResult.toolName, { findings, removedSpans: sanitizedResult.removedSpans });
+  }
+
+  return sanitizedResult;
+}
+
+// ─── AI Safety Initialization ──────────────────────────────────────────
 
 app.get('/api/sentinel/scenarios', (_req, res) => {
   res.json({ scenarios: ATTACK_SCENARIOS });

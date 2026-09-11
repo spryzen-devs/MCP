@@ -174,3 +174,93 @@ export interface AttackScenario {
   targetServer: string;
   severity: 'info' | 'warning' | 'critical';
 }
+
+// ─── Untrusted Boundary ─────────────────────────────────────────────
+
+export interface UntrustedMCPResult {
+  trust: 'UNTRUSTED';
+  source: 'MCP_TOOL_RESULT';
+  serverId: string;
+  toolName: string;
+  isError: boolean;
+  originalContent: any;
+}
+
+// ─── Text Extraction ────────────────────────────────────────────────
+
+export interface ExtractedText {
+  text: string;
+  serverId: string;
+  toolName: string;
+  source: string;
+  path: string;
+  blockIndex?: number;
+}
+
+// ─── Normalization ──────────────────────────────────────────────────
+
+export interface NormalizedText {
+  originalText: string;
+  normalizedText: string;
+  serverId: string;
+  toolName: string;
+  source: string;
+  path: string;
+  blockIndex?: number;
+}
+
+// ─── Detection ──────────────────────────────────────────────────────
+
+export type ThreatCategory = 
+  | 'instruction_override' 
+  | 'role_impersonation' 
+  | 'sensitive_data_exfiltration' 
+  | 'unauthorized_action' 
+  | 'security_bypass' 
+  | 'external_reference';
+
+export type RiskSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface Indicator {
+  category: ThreatCategory;
+  ruleId: string;
+  matchedText: string;
+  confidenceContribution: number;
+  location: string;
+}
+
+export interface InjectionFinding {
+  threatType: 'INDIRECT_PROMPT_INJECTION';
+  severity: RiskSeverity;
+  serverId: string;
+  toolName: string;
+  source: string;
+  path: string;
+  indicators: Indicator[];
+  reason: string;
+  blockIndex?: number;
+}
+
+// ─── Sanitization ───────────────────────────────────────────────────
+
+export interface RemovedSpanAudit {
+  ruleId: string;
+  category: string;
+  path: string;
+  blockIndex?: number;
+  removedTextLength: number;
+  replacementMarker: string;
+}
+
+export interface SanitizationResult {
+  trust: 'SANITIZED';
+  source: string;
+  serverId: string;
+  toolName: string;
+  isError: boolean;
+  originalContent: any;
+  sanitizedContent: any;
+  isQuarantined: boolean;
+  removedSpans: RemovedSpanAudit[];
+}
+

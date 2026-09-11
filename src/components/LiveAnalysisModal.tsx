@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { X, Terminal, Code, ShieldCheck } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
@@ -152,12 +152,10 @@ export default function LiveAnalysisModal() {
                 style={{ backgroundColor: '#dc2626', color: 'white' }}
                 onClick={async () => {
                   const { useStore } = await import('../store/useStore');
-                  const uiId = liveAnalysisServerId === 'calculator' ? 'server-calc' 
-                    : liveAnalysisServerId === 'email' ? 'server-email' 
-                    : liveAnalysisServerId === 'calculatormcp2' ? 'server-calcmcp2'
-                    : liveAnalysisServerId === 'documentsearch' ? 'server-docsearch'
-                    : liveAnalysisServerId;
-                  await useStore.getState().approveServer(uiId);
+                  await useStore.getState().approveServer(
+                     liveAnalysisServerId === 'calculator' ? 'server-calc' : 
+                     liveAnalysisServerId === 'email' ? 'server-email' : 'server-calcmcp2'
+                  );
                   useStore.getState().fetchSentinelStatus();
                   setLiveAnalysisOpen(false);
                 }}

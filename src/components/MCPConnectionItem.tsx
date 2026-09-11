@@ -6,78 +6,69 @@ export default function MCPConnectionItem({ server }: { server: McpServer }) {
   const { selectedServerId, setSelectedServerId, trustRegistry } = useStore();
   const isSelected = selectedServerId === server.id;
 
-  // Map UI server ID to sentinel server ID
-  const sentinelId = server.id === 'server-calc' ? 'calculator' : server.id === 'server-email' ? 'email' : null;
+  // Map UI server ID to Sentinel internal server key
+  const sentinelId = server.id === 'server-calc' ? 'calculator'
+    : server.id === 'server-email' ? 'email'
+    : server.id === 'server-calcmcp2' ? 'calculatormcp2'
+    : server.id === 'server-docsearch' ? 'documentsearch' : null;
+
   const serverTrust = sentinelId && trustRegistry?.servers?.[sentinelId];
   const trustStatus = serverTrust?.status;
 
   return (
     <div
-      className="flex flex-col"
+      className={`sidebar-nav-item ${isSelected ? 'active' : ''}`}
       style={{
-        padding: '12px',
-        borderRadius: 'var(--radius-md)',
-        background: isSelected ? 'var(--bg-app)' : 'transparent',
-        border: '1px solid',
-        borderColor: isSelected ? 'var(--border-subtle)' : 'transparent',
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
+        padding: '7px 10px',
+        borderRadius: 'var(--radius-sm)',
+        justifyContent: 'space-between',
+        cursor: 'pointer'
       }}
       onClick={() => setSelectedServerId(isSelected ? null : server.id)}
-      onMouseEnter={(e) => {
-        if (!isSelected) e.currentTarget.style.background = 'var(--bg-surface-hover)';
-      }}
-      onMouseLeave={(e) => {
-        if (!isSelected) e.currentTarget.style.background = 'transparent';
-      }}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center" style={{ gap: '10px' }}>
-          <div style={{ color: 'var(--text-secondary)' }}>
-            <Server size={16} />
-          </div>
-          <span className="font-medium text-sm">{server.name}</span>
-        </div>
+      <div className="flex items-center" style={{ gap: '8px', minWidth: 0 }}>
+        <Server size={14} style={{ opacity: isSelected ? 0.9 : 0.6, flexShrink: 0 }} />
+        <span style={{ fontSize: '0.825rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {server.name}
+        </span>
+      </div>
 
-        {/* Status Indicator */}
-        <div className="flex items-center" style={{ gap: '6px' }}>
-          {server.status === 'connected' && trustStatus && (
-            <TrustIndicator status={trustStatus} />
-          )}
-          {server.status !== 'connected' && (
-            <span className="text-xs text-tertiary">{server.status}</span>
-          )}
-          <span className={`status-dot status-${server.status}`}></span>
-        </div>
+      {/* Status Indicator */}
+      <div className="flex items-center" style={{ gap: '6px', flexShrink: 0 }}>
+        {server.status === 'connected' && trustStatus ? (
+          <TrustBadge status={trustStatus} />
+        ) : (
+          <span className="text-xs text-tertiary" style={{ fontSize: '0.7rem' }}>
+            {server.status}
+          </span>
+        )}
+        <span className={`status-dot status-${server.status}`}></span>
       </div>
     </div>
   );
 }
 
-function TrustIndicator({ status }: { status: string }) {
+function TrustBadge({ status }: { status: string }) {
   switch (status) {
     case 'trusted':
       return (
-        <div className="flex items-center" style={{ gap: '3px' }}>
-          <ShieldCheck size={12} style={{ color: 'var(--status-connected)' }} />
-          <span className="text-xs" style={{ color: 'var(--status-connected)' }}>Verified</span>
-        </div>
+        <span className="flex items-center text-xs" style={{ gap: '3px', color: 'var(--sentinel-trusted)', fontSize: '0.675rem' }}>
+          <ShieldCheck size={11} /> Trusted
+        </span>
       );
     case 'suspended':
     case 'mutation_detected':
       return (
-        <div className="flex items-center" style={{ gap: '3px' }}>
-          <ShieldAlert size={12} style={{ color: 'var(--sentinel-warning)' }} />
-          <span className="text-xs" style={{ color: 'var(--sentinel-warning)' }}>Integrity Change</span>
-        </div>
+        <span className="flex items-center text-xs" style={{ gap: '3px', color: 'var(--sentinel-critical)', fontSize: '0.675rem' }}>
+          <ShieldAlert size={11} /> Suspended
+        </span>
       );
     case 'pending_approval':
     case 'discovered':
       return (
-        <div className="flex items-center" style={{ gap: '3px' }}>
-          <Shield size={12} style={{ color: 'var(--text-tertiary)' }} />
-          <span className="text-xs text-tertiary">Pending</span>
-        </div>
+        <span className="flex items-center text-xs" style={{ gap: '3px', color: 'var(--sentinel-warning)', fontSize: '0.675rem' }}>
+          <Shield size={11} /> Review
+        </span>
       );
     default:
       return null;

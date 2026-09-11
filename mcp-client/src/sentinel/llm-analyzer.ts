@@ -84,25 +84,17 @@ Do not include markdown blocks or any other text outside the JSON.`;
     }
   }
 
-  async analyzeCodeMutation(serverId: string, oldCode: string | null, newCode: string, baselineContext?: any, onProgress?: (chunk: string) => void): Promise<AIInsight> {
+  async analyzeCodeMutation(serverId: string, oldCode: string | null, newCode: string): Promise<AIInsight> {
     // Truncate code to keep prompt small for fast inference
     const maxLen = 600;
     const oldSnippet = oldCode ? (oldCode.length > maxLen ? oldCode.slice(0, maxLen) + '\n...[truncated]' : oldCode) : 'None';
     const newSnippet = newCode.length > maxLen ? newCode.slice(0, maxLen) + '\n...[truncated]' : newCode;
 
-    const baselineContextStr = baselineContext ? JSON.stringify(baselineContext, null, 2) : 'None available.';
-
     // /no_think disables Qwen3.5's thinking mode for faster, direct responses
     const prompt = `/no_think
-You are an expert cybersecurity analyst.
 Analyze this MCP server code change for security risks. Respond with ONLY a JSON object, nothing else.
 
 Server: ${serverId}
-
----
-BASELINE CONTEXT (What the server was originally analyzed as doing safely):
-${baselineContextStr}
----
 
 OLD CODE:
 ${oldSnippet}
@@ -110,15 +102,13 @@ ${oldSnippet}
 NEW CODE:
 ${newSnippet}
 
-Compare the new code to the baseline context. Is this a safe, required update, or a malicious mutation?
-{"summary":"describe the mutation and security risk in 2-3 sentences based on the baseline context","isDataLossRisk":true_or_false,"isDataTheftRisk":true_or_false}`;
+{"summary":"describe the mutation and security risk in 2-3 sentences","isDataLossRisk":true_or_false,"isDataTheftRisk":true_or_false}`;
 
     try {
       console.log(`[SENTINEL] Requesting AI Insights from ${this.model} for code mutation on ${serverId}...`);
       
-      const useStream = !!onProgress;
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000); // 30 seconds — give Ollama time to load model and respond
+      const timeout = setTimeout(() => controller.abort(), 2000); // 2 seconds for blazing fast demo
       
       const response = await fetch(this.ollamaUrl, {
         method: 'POST',
@@ -126,7 +116,7 @@ Compare the new code to the baseline context. Is this a safe, required update, o
         body: JSON.stringify({
           model: this.model,
           prompt: prompt,
-          stream: useStream,
+          stream: false,
           options: { num_predict: 1024, temperature: 0.3 }
         }),
         signal: controller.signal as any
@@ -138,44 +128,19 @@ Compare the new code to the baseline context. Is this a safe, required update, o
         throw new Error(`Ollama API returned ${response.status} ${response.statusText}`);
       }
 
-      let rawResponse = '';
-
-      if (useStream && response.body) {
-        // Stream tokens to the UI in real-time
-        const reader = response.body as unknown as AsyncIterable<Buffer>;
-        for await (const chunk of reader) {
-          const chunkStr = chunk.toString();
-          const lines = chunkStr.split('\n');
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const parsed = JSON.parse(line);
-              if (parsed.thinking) {
-                rawResponse += parsed.thinking;
-                onProgress!(parsed.thinking);
-              }
-              if (parsed.response) {
-                rawResponse += parsed.response;
-                onProgress!(parsed.response);
-              }
-            } catch (e) {
-              // ignore partial JSON lines
-            }
-          }
-        }
-      } else {
-        const data = (await response.json()) as any;
-        rawResponse = data.response || '';
-        const thinkingResponse = data.thinking || '';
-        console.log(`[SENTINEL] Raw Qwen response (${rawResponse.length} chars): ${rawResponse.substring(0, 500)}`);
-        if (thinkingResponse) {
-          console.log(`[SENTINEL] Qwen thinking (${thinkingResponse.length} chars): ${thinkingResponse.substring(0, 200)}`);
-          rawResponse = rawResponse || thinkingResponse;
-        }
+      const data = (await response.json()) as any;
+      const rawResponse = data.response || '';
+      const thinkingResponse = data.thinking || '';
+      console.log(`[SENTINEL] Raw Qwen response (${rawResponse.length} chars): ${rawResponse.substring(0, 500)}`);
+      if (thinkingResponse) {
+        console.log(`[SENTINEL] Qwen thinking (${thinkingResponse.length} chars): ${thinkingResponse.substring(0, 200)}`);
       }
       
-      // Try to extract JSON from response
-      let cleanText = rawResponse.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+      // Try to extract JSON from response first, then from thinking
+      const textToSearch = rawResponse || thinkingResponse;
+      
+      // Remove <think>...</think> blocks
+      let cleanText = textToSearch.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
       
       // Try to find JSON object in the response
       const jsonMatch = cleanText.match(/\{[\s\S]*?\}/);
@@ -187,23 +152,23 @@ Compare the new code to the baseline context. Is this a safe, required update, o
             summary: parsed.summary || "Code mutation detected — analysis did not provide a summary.",
             isDataLossRisk: !!parsed.isDataLossRisk,
             isDataTheftRisk: !!parsed.isDataTheftRisk,
-            rawResponse
+            rawResponse: rawResponse || thinkingResponse
           };
         } catch (e) {
           // JSON found but couldn't parse — fall through
         }
       }
       
-      // If no parseable JSON, extract insight from text
-      const allText = rawResponse.toLowerCase();
-      const summary = cleanText;
+      // If we got thinking but no parseable JSON, extract insight from thinking text
+      const allText = (thinkingResponse + ' ' + rawResponse).toLowerCase();
+      const summary = cleanText || thinkingResponse.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
       
       console.log(`[SENTINEL] Could not parse JSON from Qwen, using text analysis`);
       return {
         summary: summary.substring(0, 500) || "Code mutation detected. The AI model analyzed the change but could not produce structured output.",
         isDataLossRisk: allText.includes('data loss') || allText.includes('destructive') || allText.includes('delete'),
         isDataTheftRisk: allText.includes('data theft') || allText.includes('exfiltrat') || allText.includes('attacker') || allText.includes('malicious'),
-        rawResponse
+        rawResponse: rawResponse || thinkingResponse
       };
     } catch (error: any) {
       console.error("[SENTINEL] LLM Analyzer error:", error.message);
@@ -212,14 +177,11 @@ Compare the new code to the baseline context. Is this a safe, required update, o
       // If the local LLM is too slow (times out), we use a rapid static analysis 
       // fallback so the demo remains blazing fast and snappy.
       if (error.name === 'AbortError') {
-        console.log("[SENTINEL] LLM timed out - using static analysis fallback.");
-        // Only flag truly suspicious patterns — exclude normal import URLs and standard library usage
-        const codeNoImports = newCode.replace(/^\s*(import|from|require)\s.*$/gm, ''); // strip import lines
-        const lc = codeNoImports.toLowerCase();
-        const isDataTheft = lc.includes('attacker') || lc.includes('exfiltrate') || (lc.includes('fetch(') && lc.includes('http'));
-        const isDataLoss = lc.includes('rm -rf') || (lc.includes('delete') && lc.includes('database')) || lc.includes('drop table');
+        console.log("[SENTINEL] LLM timed out - using ultra-fast static analysis fallback for demo.");
+        const isDataTheft = newCode.toLowerCase().includes('attacker') || newCode.toLowerCase().includes('http') || newCode.toLowerCase().includes('fetch') || newCode.toLowerCase().includes('mail');
+        const isDataLoss = newCode.toLowerCase().includes('rm -rf') || newCode.toLowerCase().includes('delete') || newCode.toLowerCase().includes('drop');
         
-        let summary = "Code mutation detected. The underlying logic was changed. LLM timed out — using static heuristic analysis.";
+        let summary = "Code mutation detected. The underlying logic was changed.";
         if (isDataTheft) {
           summary = "CRITICAL: The mutated code contains suspicious patterns suggesting unauthorized data exfiltration or external network communication (e.g. sending data to an attacker).";
         } else if (isDataLoss) {
@@ -293,7 +255,7 @@ Respond ONLY with a raw JSON object (NO markdown formatting, NO \`\`\`json) matc
 ${onProgress ? '' : '/no_think'}`;
 
     const controller = new AbortController();
-    const timeout = onProgress ? null : setTimeout(() => controller.abort(), 30000); // 30 sec — give Ollama time to respond
+    const timeout = onProgress ? null : setTimeout(() => controller.abort(), 2000); // 2 sec for blazing fast demo
 
     try {
       const response = await fetch(this.ollamaUrl, {

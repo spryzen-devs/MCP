@@ -35,43 +35,63 @@ export default function MutationAlertModal() {
         <div className="flex items-center justify-between" style={{ marginBottom: '16px' }}>
           <div className="flex items-center" style={{ gap: '10px' }}>
             <div className="sentinel-icon-alert">
-              <ShieldAlert size={20} />
+              <ShieldAlert size={18} />
             </div>
             <div>
-              <h2 className="font-medium text-lg">Manifest Integrity Violation</h2>
-              <p className="text-sm text-secondary">{mutationAlert.serverName}</p>
+              <h2 className="font-medium text-lg" style={{ fontSize: '1.05rem' }}>Integrity Change Detected</h2>
+              <p className="text-xs text-secondary">{mutationAlert.serverName || 'MCP Server'}</p>
             </div>
           </div>
           <button className="btn-icon" onClick={handleClose}>
-            <X size={20} />
+            <X size={18} />
           </button>
+        </div>
+
+        {/* Status Callout Box */}
+        <div style={{
+          padding: '12px 14px',
+          background: 'rgba(201, 59, 59, 0.06)',
+          border: '1px solid var(--sentinel-critical-border)',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '16px'
+        }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: '4px' }}>
+            <span className="text-xs font-semibold" style={{ color: 'var(--sentinel-critical)' }}>
+              Execution Suspended
+            </span>
+            <span className="sentinel-status-badge sentinel-status-suspended">
+              SUSPENDED
+            </span>
+          </div>
+          <p className="text-xs text-secondary" style={{ lineHeight: 1.45 }}>
+            The server's current tool definition differs from the approved baseline. Sentinel has blocked execution until reviewed.
+          </p>
         </div>
 
         {/* Cross-Server Warnings */}
         {crossServerWarnings.length > 0 && (
           <div className="sentinel-cross-server-banner">
-            <div className="flex items-center" style={{ gap: '8px', marginBottom: '8px' }}>
-              <AlertTriangle size={16} />
-              <span className="font-medium">Cross-Server Instruction Detected</span>
+            <div className="flex items-center" style={{ gap: '6px', marginBottom: '6px' }}>
+              <AlertTriangle size={15} />
+              <span className="font-medium text-xs">Cross-Server Behavior Detected</span>
             </div>
             {crossServerWarnings.map((w, i) => (
-              <div key={i} className="text-sm" style={{ marginBottom: '4px' }}>
+              <div key={i} className="text-xs" style={{ marginBottom: '4px' }}>
                 <div><strong>Source:</strong> {w.sourceServer} → {w.sourceTool}</div>
-                <div><strong>Referenced target:</strong> {w.referencedTarget}</div>
-                <div><strong>Suspicious behavior:</strong> {w.suspiciousBehavior}</div>
-                <div className="text-xs text-tertiary" style={{ marginTop: '2px' }}>Pattern: {w.matchedPattern}</div>
+                <div><strong>Target:</strong> {w.referencedTarget}</div>
+                <div><strong>Behavior:</strong> {w.suspiciousBehavior}</div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Scrollable content */}
+        {/* Scrollable content area */}
         <div style={{ overflowY: 'auto', flex: 1, paddingRight: '4px' }}>
           {suspendedTools.map((tool, idx) => (
             <div key={idx} className="sentinel-tool-alert" style={{ marginBottom: '16px' }}>
-              <div className="flex items-center justify-between" style={{ marginBottom: '12px' }}>
+              <div className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
                 <div>
-                  <div className="font-medium">{tool.tool}</div>
+                  <div className="font-medium text-sm">{tool.tool}</div>
                   {tool.mutationCategories && (
                     <div className="flex" style={{ gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
                       {tool.mutationCategories.map((cat, i) => (
@@ -80,51 +100,59 @@ export default function MutationAlertModal() {
                     </div>
                   )}
                 </div>
-                <span className="sentinel-status-badge sentinel-status-suspended">SUSPENDED</span>
               </div>
 
-              {/* Fingerprints */}
-              <div className="sentinel-fingerprints">
+              {/* SHA-256 Fingerprints Comparison */}
+              <div className="sentinel-fingerprints" style={{ marginBottom: '12px' }}>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-secondary">Trusted fingerprint</span>
-                  <code className="text-xs">{tool.baselineHash ? tool.baselineHash.substring(0, 16) + '...' : 'N/A'}</code>
+                  <span className="text-tertiary">Approved Fingerprint</span>
+                  <code className="text-xs text-secondary">{tool.baselineHash ? tool.baselineHash.substring(0, 20) + '...' : 'N/A'}</code>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-secondary">Current fingerprint</span>
-                  <code className="text-xs">{tool.currentHash ? tool.currentHash.substring(0, 16) + '...' : 'N/A'}</code>
+                  <span className="text-tertiary">Current Fingerprint</span>
+                  <code className="text-xs" style={{ color: 'var(--sentinel-critical)' }}>{tool.currentHash ? tool.currentHash.substring(0, 20) + '...' : 'N/A'}</code>
                 </div>
               </div>
 
-              {/* Diff */}
+              {/* Approved vs Current Manifest Diff */}
               {tool.diff && tool.diff.length > 0 && (
                 <div style={{ marginTop: '12px' }}>
-                  <div className="text-xs font-medium text-tertiary uppercase" style={{ marginBottom: '8px', letterSpacing: '0.05em' }}>
-                    Changes Detected
+                  <div className="text-xs font-medium text-tertiary uppercase mb-2" style={{ letterSpacing: '0.05em', fontSize: '0.675rem' }}>
+                    Manifest Changes
                   </div>
                   <ManifestDiffView diffs={tool.diff} />
                 </div>
               )}
 
-              {/* AI Security Insights */}
+              {/* AI Security Review Advisory (Ollama / Qwen) */}
               {tool.aiInsights && (
-                <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(56, 189, 248, 0.05)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
-                  <div className="flex items-center justify-between" style={{ marginBottom: '8px' }}>
+                <div style={{
+                  marginTop: '14px',
+                  padding: '12px',
+                  background: 'var(--sentinel-info-bg)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid rgba(72, 114, 148, 0.2)'
+                }}>
+                  <div className="flex items-center justify-between" style={{ marginBottom: '6px' }}>
                     <div className="flex items-center" style={{ gap: '6px' }}>
-                      <Bot size={14} style={{ color: '#38bdf8' }} />
-                      <span className="text-xs font-medium uppercase" style={{ color: '#38bdf8', letterSpacing: '0.05em' }}>AI Security Insights (Qwen 0.5b)</span>
+                      <Bot size={14} style={{ color: 'var(--sentinel-info)' }} />
+                      <span className="text-xs font-medium uppercase" style={{ color: 'var(--sentinel-info)', letterSpacing: '0.04em' }}>
+                        Advisory AI Security Analysis
+                      </span>
                     </div>
+                    <span className="text-xs text-tertiary" style={{ fontSize: '0.675rem' }}>Ollama / Qwen</span>
                   </div>
-                  <p className="text-sm" style={{ color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.5 }}>
+                  <p className="text-xs text-secondary" style={{ marginBottom: '8px', lineHeight: 1.45 }}>
                     {tool.aiInsights.summary}
                   </p>
                   <div className="flex" style={{ gap: '12px' }}>
                     <div className="flex items-center" style={{ gap: '4px' }}>
-                      {tool.aiInsights.isDataLossRisk ? <ShieldAlert size={14} style={{ color: 'var(--status-error)' }} /> : <ShieldCheck size={14} style={{ color: 'var(--status-connected)' }} />}
-                      <span className="text-xs">{tool.aiInsights.isDataLossRisk ? 'High Data Loss Risk' : 'Low Data Loss Risk'}</span>
+                      {tool.aiInsights.isDataLossRisk ? <ShieldAlert size={13} style={{ color: 'var(--sentinel-critical)' }} /> : <ShieldCheck size={13} style={{ color: 'var(--sentinel-trusted)' }} />}
+                      <span className="text-xs text-secondary">{tool.aiInsights.isDataLossRisk ? 'High Data Loss Risk' : 'Low Data Loss Risk'}</span>
                     </div>
                     <div className="flex items-center" style={{ gap: '4px' }}>
-                      {tool.aiInsights.isDataTheftRisk ? <ShieldAlert size={14} style={{ color: 'var(--status-error)' }} /> : <ShieldCheck size={14} style={{ color: 'var(--status-connected)' }} />}
-                      <span className="text-xs">{tool.aiInsights.isDataTheftRisk ? 'High Data Theft Risk' : 'Low Data Theft Risk'}</span>
+                      {tool.aiInsights.isDataTheftRisk ? <ShieldAlert size={13} style={{ color: 'var(--sentinel-critical)' }} /> : <ShieldCheck size={13} style={{ color: 'var(--sentinel-trusted)' }} />}
+                      <span className="text-xs text-secondary">{tool.aiInsights.isDataTheftRisk ? 'High Data Theft Risk' : 'Low Data Theft Risk'}</span>
                     </div>
                   </div>
                 </div>
@@ -134,25 +162,21 @@ export default function MutationAlertModal() {
               <div className="flex" style={{ gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
                 <button
                   className="btn"
-                  style={{ color: 'var(--status-error)', borderColor: 'rgba(220, 38, 38, 0.2)' }}
+                  style={{ color: 'var(--sentinel-critical)', borderColor: 'var(--sentinel-critical-border)', padding: '7px 14px' }}
                   onClick={() => handleReject(tool)}
                 >
-                  Reject Update
+                  Reject Change
                 </button>
                 <button
-                  className="btn"
-                  style={{ background: 'var(--status-connected)', color: 'white', border: 'none' }}
+                  className="btn btn-primary"
+                  style={{ padding: '7px 14px' }}
                   onClick={() => handleApprove(tool)}
                 >
-                  <ShieldCheck size={14} /> Approve & Trust
+                  <ShieldCheck size={14} /> Review & Approve
                 </button>
               </div>
             </div>
           ))}
-        </div>
-
-        <div className="text-xs text-tertiary" style={{ marginTop: '12px', textAlign: 'center' }}>
-          The approved tool manifest has changed. Execution has been suspended until reviewed.
         </div>
       </div>
     </div>

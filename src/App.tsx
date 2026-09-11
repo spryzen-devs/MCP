@@ -7,6 +7,7 @@ import TrustRegistryPanel from './components/TrustRegistryPanel';
 import AuditLogPanel from './components/AuditLogPanel';
 import AttackSimulator from './components/AttackSimulator';
 import ApprovalFlow from './components/ApprovalFlow';
+import MutationAlertModal from './components/MutationAlertModal';
 import CodeMutationAlertModal from './components/CodeMutationAlertModal';
 import LiveAnalysisModal from './components/LiveAnalysisModal';
 
@@ -20,17 +21,22 @@ function App() {
 
   return (
     <div className="app-container">
+      {/* Zone 1: Left Navigation Sidebar (~240px) */}
       <Sidebar />
-      <ChatArea />
-      {selectedServer && <RightPanel server={selectedServer} />}
-      {isConnectModalOpen && <ConnectMCPModal />}
 
-      {/* Sentinel Security Modals */}
+      {/* Zone 2: Center Main Workspace (Effortless AI Chat) */}
+      <ChatArea />
+
+      {/* Zone 3: Right Contextual Inspector (Professional Utility Panel) */}
+      {selectedServer && <RightPanel server={selectedServer} />}
+
+      {/* Modals & Dialogs */}
+      {isConnectModalOpen && <ConnectMCPModal />}
       <TrustRegistryPanel />
       <AuditLogPanel />
       <AttackSimulator />
 
-      {/* Approval Flow — shown when a server is first discovered */}
+      {/* Approval Flow — Discovery review */}
       {pendingApproval && (
         <ApprovalFlow
           verification={pendingApproval}
@@ -40,10 +46,10 @@ function App() {
 
       <LiveAnalysisModal />
 
-      {/* Mutation Alert — shown when integrity violation detected */}
+      {/* Manifest Integrity Review — Sentinel Signature interaction */}
       {mutationAlert && <MutationAlertModal />}
 
-      {/* Code Mutation Alert — True Zero-Trust */}
+      {/* True Zero-Trust Code Mutation Alert */}
       <CodeMutationAlertModal />
     </div>
   );

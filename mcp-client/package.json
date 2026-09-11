@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/tests/phase3-tests.ts",
-    "start": "node dist/tests/phase3-tests.js",
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "test": "tsx src/tests/phase3-tests.ts",
     "api": "tsx src/server.ts"
   },
   "dependencies": {

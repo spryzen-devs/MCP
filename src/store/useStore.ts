@@ -239,12 +239,18 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const sentinelId = SERVER_MAP[serverId] || serverId;
       const data = await api.approveServer(sentinelId);
+      const uiServerId = Object.keys(SERVER_MAP).find(k => SERVER_MAP[k] === sentinelId) || serverId;
+
+      if (data?.tools) {
+        get().updateServerStatus(uiServerId, 'connected', data.tools);
+      } else {
+        get().updateServerStatus(uiServerId, 'connected');
+      }
+
       set({
         trustRegistry: data.registry,
         pendingApproval: null
       });
-      // Update UI server status to connected
-      get().updateServerStatus(serverId, 'connected');
       // Refresh audit log
       get().fetchAuditLog();
     } catch (e) {

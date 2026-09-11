@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Paperclip, Wrench, ArrowUp, ChevronDown, Loader2 } from 'lucide-react';
+import { Paperclip, Wrench, ArrowUp, Loader2, Plus, ShieldCheck } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { calculateExpression, sendMockEmail, readMockEmails, searchDocuments } from '../services/chat-api';
 
 export default function ChatComposer() {
   const [input, setInput] = useState('');
-  const [showTools, setShowTools] = useState(false);
+  const [showToolsPopover, setShowToolsPopover] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { addMessage, activeConversationId, createNewConversation, mcpServers } = useStore();
+  const { addMessage, activeConversationId, createNewConversation, mcpServers, setConnectModalOpen } = useStore();
+
+  const connectedServers = mcpServers.filter(s => s.status === 'connected');
+  const totalToolsCount = connectedServers.reduce((acc, s) => acc + s.tools.length, 0);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -16,25 +19,25 @@ export default function ChatComposer() {
     if (!convId) {
       convId = createNewConversation();
     }
-    
+
     addMessage(convId, {
       id: `msg-${Date.now()}`,
       role: 'user',
       content: input,
       timestamp: Date.now()
     });
-    
+
     const userPrompt = input;
     setInput('');
     setIsLoading(true);
 
     try {
       // Deterministic routing without LLM
-      const calcMatch = userPrompt.trim().match(/^Calculate\s+(.+)$/i);
+      const calcMatch = userPrompt.trim().match(/^Calculate\s+(.+)$/i) || userPrompt.trim().match(/^([\d\s\+\-\*\/\(\)\.\^]+)$/i);
       const emailMatch = userPrompt.trim().match(/^Email\s+to:\s+(.+?)\s+subject:\s+(.+?)\s+body:\s+(.+)$/i);
       const readEmailsMatch = userPrompt.trim().match(/^Read emails$/i);
       const searchMatch = userPrompt.trim().match(/^Search documents\s+(.+)$/i);
-      
+
       if (calcMatch) {
         const calcServer = mcpServers.find(s => s.id === 'server-calc');
         if (!calcServer || calcServer.status !== 'connected') {
@@ -43,7 +46,7 @@ export default function ChatComposer() {
 
         const expression = calcMatch[1].trim();
         const response = await calculateExpression(expression);
-        
+
         addMessage(convId, {
           id: `msg-${Date.now()}`,
           role: 'assistant',
@@ -68,9 +71,9 @@ export default function ChatComposer() {
         const to = emailMatch[1].trim();
         const subject = emailMatch[2].trim();
         const body = emailMatch[3].trim();
-        
+
         const response = await sendMockEmail(to, subject, body);
-        
+
         addMessage(convId, {
           id: `msg-${Date.now()}`,
           role: 'assistant',
@@ -98,7 +101,7 @@ export default function ChatComposer() {
           try {
             const parsed = JSON.parse(response.result);
             if (parsed.emails && Array.isArray(parsed.emails)) {
-              content = '**UNREAD EMAILS**\n\n' + parsed.emails.map((e: any) => 
+              content = '**UNREAD EMAILS**\n\n' + parsed.emails.map((e: any) =>
                 `**From:** ${e.sender}\n**Subject:** ${e.subject}\n**Time:** ${e.timestamp}\n**Body:** ${e.body}`
               ).join('\n\n---\n\n');
             } else {
@@ -134,7 +137,7 @@ export default function ChatComposer() {
 
         const query = searchMatch[1].trim();
         const response = await searchDocuments(query);
-        
+
         let displayContent = '';
         if (response.success) {
           displayContent = `**SEARCH RESULTS**\n\n${response.result}`;
@@ -144,7 +147,7 @@ export default function ChatComposer() {
             displayContent = `🚨 **SECURITY BLOCK** 🚨\n\n${response.error}`;
           }
         }
-        
+
         addMessage(convId, {
           id: `msg-${Date.now()}`,
           role: 'assistant',
@@ -164,11 +167,11 @@ export default function ChatComposer() {
         addMessage(convId, {
           id: `msg-${Date.now()}`,
           role: 'assistant',
-          content: "I am running in deterministic mode without an LLM.\n\nCalculator Example: 'Calculate 25 * 4'\nEmail Example: 'Email to: test@example.com subject: Hello body: This is a test'\nRead Emails Example: 'Read emails'",
+          content: "I am running in deterministic mode without an LLM.\n\nCalculator Example: 'Calculate 25 * 4'\nEmail Example: 'Email to: test@example.com subject: Hello body: This is a test'\nRead Emails Example: 'Read emails'\nDoc Search Example: 'Search documents Q3 report'",
           timestamp: Date.now()
         });
       }
-      
+
     } catch (error: any) {
       addMessage(convId, {
         id: `msg-${Date.now()}`,
@@ -182,16 +185,17 @@ export default function ChatComposer() {
   };
 
   return (
-    <div style={{ padding: '0 32px 32px 32px' }}>
-      <div 
-        style={{ 
-          background: 'var(--bg-surface)', 
+    <div style={{ width: '100%', maxWidth: '780px', margin: '0 auto 24px auto', padding: '0 24px' }}>
+      <div
+        style={{
+          background: 'var(--bg-elevated)',
           borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border-subtle)',
+          border: '1px solid var(--border-medium)',
           boxShadow: 'var(--shadow-md)',
           position: 'relative'
         }}
       >
+        {/* Text Input area */}
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -204,103 +208,158 @@ export default function ChatComposer() {
           placeholder="Ask anything..."
           style={{
             width: '100%',
-            minHeight: '60px',
-            maxHeight: '200px',
+            minHeight: '64px',
+            maxHeight: '180px',
             padding: '16px 20px',
             border: 'none',
             background: 'transparent',
             resize: 'none',
             outline: 'none',
             fontFamily: 'inherit',
-            fontSize: '1rem',
-            color: 'var(--text-primary)'
+            fontSize: '0.925rem',
+            color: 'var(--text-primary)',
+            lineHeight: 1.5
           }}
         />
 
-        <div className="flex items-center justify-between" style={{ padding: '8px 12px', borderTop: '1px solid var(--border-subtle)' }}>
-          <div className="flex items-center" style={{ gap: '8px' }}>
+        {/* Toolbar */}
+        <div
+          className="flex items-center justify-between"
+          style={{ padding: '8px 14px', borderTop: '1px solid var(--border-subtle)' }}
+        >
+          <div className="flex items-center" style={{ gap: '6px' }}>
+            {/* Attachment Button */}
             <button className="btn-icon" title="Attach file">
-              <Paperclip size={18} />
+              <Paperclip size={16} />
             </button>
-            
+
+            {/* Tools Control Button & Popover */}
             <div style={{ position: 'relative' }}>
-              <button 
-                className="btn" 
-                style={{ background: showTools ? 'var(--bg-surface-hover)' : 'transparent', border: 'none', padding: '6px 10px' }}
-                onClick={() => setShowTools(!showTools)}
+              <button
+                className="btn"
+                style={{
+                  background: showToolsPopover ? 'rgba(0, 0, 0, 0.05)' : 'transparent',
+                  border: 'none',
+                  padding: '5px 9px',
+                  gap: '6px',
+                  borderRadius: 'var(--radius-sm)'
+                }}
+                onClick={() => setShowToolsPopover(!showToolsPopover)}
               >
-                <Wrench size={16} className="text-secondary" />
-                <span className="text-secondary">Tools</span>
+                <Wrench size={14} style={{ color: 'var(--text-secondary)' }} />
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                  Tools {connectedServers.length > 0 ? `· ${connectedServers.length} connected` : ''}
+                </span>
               </button>
-              
-              {showTools && (
-                <div style={{
-                  position: 'absolute',
-                  bottom: '100%',
-                  left: '0',
-                  marginBottom: '12px',
-                  background: 'var(--bg-elevated)',
-                  borderRadius: 'var(--radius-md)',
-                  boxShadow: 'var(--shadow-lg)',
-                  border: '1px solid var(--border-subtle)',
-                  width: '260px',
-                  padding: '12px',
-                  zIndex: 20
-                }}>
-                  <div className="text-xs font-medium text-tertiary uppercase" style={{ marginBottom: '8px', letterSpacing: '0.05em' }}>
-                    Available Tools
+
+              {/* Connected Tools Popover */}
+              {showToolsPopover && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: 0,
+                    marginBottom: '8px',
+                    width: '280px',
+                    background: 'var(--bg-elevated)',
+                    borderRadius: 'var(--radius-md)',
+                    boxShadow: 'var(--shadow-lg)',
+                    border: '1px solid var(--border-medium)',
+                    padding: '12px',
+                    zIndex: 30
+                  }}
+                >
+                  <div className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
+                    <span className="text-xs font-medium text-tertiary uppercase" style={{ letterSpacing: '0.05em' }}>
+                      Connected Tools
+                    </span>
+                    <span className="text-xs text-tertiary">{totalToolsCount} tools</span>
                   </div>
-                  <div className="flex flex-col" style={{ gap: '4px' }}>
-                    {mcpServers.filter(s => s.status === 'connected').map(server => (
-                      server.tools.map(tool => (
-                        <div key={`${server.id}-${tool.name}`} className="flex items-center" style={{ gap: '8px', padding: '6px 8px', borderRadius: '4px' }}>
-                          <input type="checkbox" defaultChecked id={`${server.id}-${tool.name}`} />
-                          <label htmlFor={`${server.id}-${tool.name}`} className="text-sm cursor-pointer flex-1" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {server.name}.{tool.name}
-                          </label>
+
+                  <div className="flex flex-col" style={{ gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
+                    {connectedServers.length === 0 ? (
+                      <div className="text-xs text-tertiary" style={{ padding: '8px 0', textAlign: 'center' }}>
+                        No MCP servers connected
+                      </div>
+                    ) : (
+                      connectedServers.map(server => (
+                        <div
+                          key={server.id}
+                          style={{
+                            padding: '8px 10px',
+                            background: 'var(--bg-app)',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-subtle)'
+                          }}
+                        >
+                          <div className="flex items-center justify-between" style={{ marginBottom: '4px' }}>
+                            <div className="flex items-center" style={{ gap: '6px' }}>
+                              <span className="status-dot status-connected"></span>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-primary)' }}>
+                                {server.name}
+                              </span>
+                            </div>
+                            <span className="text-xs text-tertiary">{server.tools.length} tools</span>
+                          </div>
+
+                          <div className="flex flex-col" style={{ gap: '2px', paddingLeft: '13px' }}>
+                            {server.tools.map(t => (
+                              <div key={t.name} className="flex items-center" style={{ gap: '6px' }}>
+                                <ShieldCheck size={11} style={{ color: 'var(--sentinel-trusted)' }} />
+                                <span className="text-xs text-secondary">{t.name}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))
-                    ))}
-                    {mcpServers.filter(s => s.status === 'connected').length === 0 && (
-                      <div className="text-sm text-secondary" style={{ padding: '4px 8px' }}>
-                        No tools connected
-                      </div>
                     )}
                   </div>
+
+                  <button
+                    onClick={() => {
+                      setShowToolsPopover(false);
+                      setConnectModalOpen(true);
+                    }}
+                    className="btn w-full"
+                    style={{
+                      marginTop: '10px',
+                      padding: '6px',
+                      fontSize: '0.775rem',
+                      justifyContent: 'center',
+                      borderStyle: 'dashed'
+                    }}
+                  >
+                    <Plus size={13} /> Connect MCP Server
+                  </button>
                 </div>
               )}
             </div>
-            
-            <div style={{ width: '1px', height: '16px', background: 'var(--border-medium)', margin: '0 4px' }} />
-            
-            <button className="btn" style={{ background: 'transparent', border: 'none', padding: '6px 10px' }}>
-              <span className="text-secondary">Claude 3.5 Sonnet</span>
-              <ChevronDown size={14} className="text-tertiary" />
-            </button>
           </div>
-          
-          <button 
+
+          {/* Send Button */}
+          <button
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
-            style={{ 
-              background: (input.trim() && !isLoading) ? 'var(--text-primary)' : 'var(--border-medium)', 
+            style={{
+              background: (input.trim() && !isLoading) ? 'var(--text-primary)' : 'var(--border-medium)',
               color: 'white',
               border: 'none',
               borderRadius: '50%',
-              width: '32px',
-              height: '32px',
+              width: '30px',
+              height: '30px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: (input.trim() && !isLoading) ? 'pointer' : 'default',
-              transition: 'all 0.2s ease'
+              transition: 'all 0.18s ease'
             }}
           >
-            {isLoading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <ArrowUp size={16} />}
+            {isLoading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <ArrowUp size={15} />
+            )}
           </button>
-          <style>{`
-            @keyframes spin { 100% { transform: rotate(360deg); } }
-          `}</style>
         </div>
       </div>
     </div>

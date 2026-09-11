@@ -44,15 +44,6 @@ const verifier = new ManifestVerifier(trustRegistry);
 export const auditLogger = new AuditLogger();
 const attackSimulator = new AttackSimulator();
 
-// ─── Startup: Reset calculator & email so first connection triggers full analysis ──
-// This ensures the live dashboard shows code extraction + LLM analysis on first connect.
-// Subsequent connects within the same session will use hash comparison for mutation detection.
-const RESET_ON_STARTUP = ['calculator', 'email'];
-for (const sid of RESET_ON_STARTUP) {
-  trustRegistry.clearServer(sid);
-}
-console.log(`[SENTINEL] Trust registry cleared for [${RESET_ON_STARTUP.join(', ')}] — fresh analysis on first connect.`);
-
 // Helper to asynchronously fetch AI insights
 async function enrichWithAIInsights(serverId: string, serverName: string, verification: ServerVerificationResult) {
   if (verification.overallStatus === 'mutation_detected') {
@@ -187,8 +178,11 @@ async function connectServer(serverId: string, path: string) {
     // Capture originals for attack simulator
     attackSimulator.captureOriginals(serverId, fullManifests);
 
-    // Register with sentinel
+    // Register with sentinel and pin initial baseline if not approved yet
     trustRegistry.registerServer(serverId, SERVER_NAMES[serverId]);
+    if (!trustRegistry.getServer(serverId)?.approvedAt) {
+      verifier.approveServer(serverId, fullManifests);
+    }
     auditLogger.record('SERVER_DISCOVERED', serverId);
 
     console.log(`[MCP] tools/list completed for ${serverId} (${fullManifests.length} tools)`);
@@ -256,25 +250,15 @@ async function connectServerStream(serverId: string, path: string, res: any) {
     );
     
     pendingSecurityReviews[serverId] = { staticFindings, aiReview, fingerprint: currentHash, rawTools: fullManifests };
-    
-    // Keep server connected so the approve endpoint can work
-    serversState[serverId].fullManifests = fullManifests;
-    serversState[serverId].tools = fullManifests.map(t => t.name);
-    serversState[serverId].connected = true;
-    trustRegistry.registerServer(serverId, SERVER_NAMES[serverId]);
+    await mcpClient.close(serverId);
     
     sendEvent('review_complete', { reviewData: pendingSecurityReviews[serverId] });
     res.end();
   } else if (currentHash !== baselineHash) {
     const oldCode = CodeVerifier.getTrustedCode(serverId);
     sendEvent('code_mutation_detected', { oldCode, newCode });
-    sendEvent('llm_started', {});
     
-    const insight = await llmAnalyzer.analyzeCodeMutation(
-      serverId, oldCode, newCode, 
-      trustRegistry.getServerContext(serverId),
-      (chunk) => sendEvent('llm_chunk', { chunk })
-    );
+    const insight = await llmAnalyzer.analyzeCodeMutation(serverId, oldCode, newCode);
     
     trustRegistry.updateServerStatus(serverId, 'code_mutation_detected', currentHash);
     pendingCodeMutations[serverId] = { oldCode, newCode, insight };
@@ -828,51 +812,44 @@ app.get('/api/sentinel/status', (_req, res) => {
 
 // ─── Approve Server (Initial Trust) ─────────────────────────────
 
-app.post('/api/sentinel/server/:id/approve', (req, res) => {
+app.post('/api/sentinel/server/:id/approve', async (req, res) => {
   try {
     const serverId = req.params.id;
-    const state = serversState[serverId];
+    const serverPath = serverId === 'calculator' ? config.calculatorServerPath
+      : serverId === 'email' ? config.emailServerPath
+      : serverId === 'documentsearch' ? config.documentSearchServerPath
+      : config.calculatorMCP2ServerPath;
 
-    if (!state || !state.connected) {
-      return res.status(400).json({ success: false, error: `Server ${serverId} is not connected.` });
+    const currentHash = CodeVerifier.getCodeHash(serverPath);
+    CodeVerifier.saveTrustedCode(serverId, serverPath);
+    trustRegistry.updateServerCodeBaseline(serverId, currentHash);
+    trustRegistry.updateServerStatus(serverId, 'trusted', currentHash);
+
+    if (!serversState[serverId]?.connected) {
+      await mcpClient.connect(serverId, serverPath);
+      const fullManifests = await mcpClient.getFullToolManifests(serverId);
+      serversState[serverId].fullManifests = fullManifests;
+      serversState[serverId].tools = fullManifests.map(t => t.name);
+      serversState[serverId].connected = true;
+      trustRegistry.registerServer(serverId, SERVER_NAMES[serverId]);
     }
 
+    const state = serversState[serverId];
     verifier.approveServer(serverId, state.fullManifests);
     auditLogger.record('SERVER_APPROVED', serverId, undefined, {
       toolCount: state.fullManifests.length,
       tools: state.tools
     });
 
-    // Save initial AI context for future mutation analysis
-    const pendingReview = pendingSecurityReviews[serverId];
-    if (pendingReview && pendingReview.aiReview) {
-      trustRegistry.setServerContext(serverId, pendingReview.aiReview);
-    }
-
-    // Save trusted code baseline + hash so subsequent connections use mutation detection
-    const serverPath = serverId === 'calculator' ? config.calculatorServerPath 
-      : serverId === 'email' ? config.emailServerPath 
-      : serverId === 'calculatormcp2' ? config.calculatorMCP2ServerPath 
-      : serverId === 'documentsearch' ? config.documentSearchServerPath 
-      : null;
-    
-    if (serverPath) {
-      const currentHash = CodeVerifier.getCodeHash(serverPath);
-      CodeVerifier.saveTrustedCode(serverId, serverPath);
-      trustRegistry.updateServerCodeBaseline(serverId, currentHash);
-      console.log(`[SENTINEL] Saved trusted code baseline for ${serverId} (hash: ${currentHash.substring(0, 12)}...)`);
-    }
-
-    // Clear pending review since it's been handled
-    delete pendingSecurityReviews[serverId];
-
     console.log(`[SENTINEL] Server ${serverId} APPROVED with ${state.fullManifests.length} tools`);
 
     res.json({
       success: true,
-      registry: trustRegistry.getSnapshot()
+      registry: trustRegistry.getSnapshot(),
+      tools: state.fullManifests
     });
   } catch (error: any) {
+    console.error('Approve error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1105,6 +1082,11 @@ app.post('/api/sentinel/simulate/reset', (_req, res) => {
 // ─── Start the server ───────────────────────────────────────────
 
 app.listen(port, () => {
+  // Pre-register trusted code baselines for standard servers
+  CodeVerifier.saveTrustedCode('calculator', config.calculatorServerPath);
+  CodeVerifier.saveTrustedCode('email', config.emailServerPath);
+  CodeVerifier.saveTrustedCode('documentsearch', config.documentSearchServerPath);
+
   console.log(`\n╔══════════════════════════════════════════╗`);
   console.log(`║  MCP SENTINEL GATEWAY                    ║`);
   console.log(`║  Backend API: http://localhost:${port}       ║`);

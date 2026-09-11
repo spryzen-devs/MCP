@@ -1,75 +1,115 @@
 import { useStore } from '../store/useStore';
 import ChatComposer from './ChatComposer';
-import { MoreHorizontal, ShieldCheck } from 'lucide-react';
+import Header from './Header';
+import { ShieldCheck, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import type { ToolExecutionState } from '../types';
 
 export default function ChatArea() {
-  const { conversations, activeConversationId } = useStore();
-  
+  const { conversations, activeConversationId, setConnectModalOpen } = useStore();
+
   const activeConversation = conversations.find(c => c.id === activeConversationId);
+
+  // Time-appropriate greeting
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning.';
+    if (hour < 18) return 'Good afternoon.';
+    return 'Good evening.';
+  };
 
   return (
     <div className="main-chat">
-      {/* Top Bar */}
-      <div className="flex items-center justify-between" style={{ padding: '20px 32px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-app)', zIndex: 10 }}>
-        <div className="flex items-center" style={{ gap: '12px' }}>
-          <h2 className="font-medium text-lg">{activeConversation?.title || 'Sentinel'}</h2>
-          
-          {/* Subtle MCP connection indicator */}
-          {activeConversation && activeConversation.enabledMcpServerIds.length > 0 && (
-            <div className="flex items-center text-xs text-tertiary" style={{ gap: '4px', padding: '4px 8px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-xl)' }}>
-              <ShieldCheck size={12} style={{ color: 'var(--status-connected)' }} />
-              <span>{activeConversation.enabledMcpServerIds.length} connected</span>
-            </div>
-          )}
-        </div>
-        
-        <button className="btn-icon">
-          <MoreHorizontal size={18} />
-        </button>
-      </div>
+      {/* Restrained Application Header */}
+      <Header />
 
       {/* Messages Area */}
-      <div className="flex-1" style={{ overflowY: 'auto', padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-        {!activeConversation ? (
-          // Empty State
-          <div className="flex flex-col items-center justify-center h-full text-center" style={{ marginTop: '-60px' }}>
-            <h2 style={{ fontSize: '2rem', fontWeight: 500, marginBottom: '12px', color: 'var(--text-primary)' }}>How can I help?</h2>
-            <p className="text-secondary" style={{ marginBottom: '40px', maxWidth: '400px' }}>
-              Connect your MCP servers and give your AI access to the tools you use.
+      <div className="flex-1" style={{ overflowY: 'auto', padding: '32px 48px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {!activeConversation || activeConversation.messages.length === 0 ? (
+          /* Empty State */
+          <div className="flex flex-col items-center justify-center h-full text-center" style={{ marginTop: '-40px' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 500, marginBottom: '6px', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+              {getGreeting()}
+            </h1>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 400, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+              What would you like to work on?
+            </h2>
+            <p className="text-sm text-tertiary" style={{ marginBottom: '32px', maxWidth: '420px', lineHeight: 1.5 }}>
+              Your connected tools are available when you need them.
             </p>
-            
-            <div className="flex" style={{ gap: '12px', flexWrap: 'wrap', justifyContent: 'center', maxWidth: '600px' }}>
-              {["Explore my connected tools", "Calculate something", "Create a document", "Connect an MCP server"].map((suggestion, i) => (
-                <button key={i} className="btn" style={{ borderRadius: 'var(--radius-xl)', padding: '10px 20px', background: 'var(--bg-surface)' }}>
-                  {suggestion}
-                </button>
-              ))}
+
+            <div className="flex" style={{ gap: '10px', flexWrap: 'wrap', justifyContent: 'center', maxWidth: '560px' }}>
+              <button
+                className="suggestion-pill"
+                onClick={() => setConnectModalOpen(true)}
+              >
+                <span>Explore connected tools</span>
+              </button>
+              <button
+                className="suggestion-pill"
+                onClick={() => {
+                  const el = document.querySelector('textarea');
+                  if (el) {
+                    (el as HTMLTextAreaElement).value = 'Calculate 25 * 4 + 10';
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.focus();
+                  }
+                }}
+              >
+                <span>Calculate something</span>
+              </button>
+              <button
+                className="suggestion-pill"
+                onClick={() => {
+                  const el = document.querySelector('textarea');
+                  if (el) {
+                    (el as HTMLTextAreaElement).value = 'Search documents Q3 financial report';
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.focus();
+                  }
+                }}
+              >
+                <span>Work with a document</span>
+              </button>
+              <button
+                className="suggestion-pill"
+                onClick={() => setConnectModalOpen(true)}
+              >
+                <span>Connect an MCP server</span>
+              </button>
             </div>
           </div>
         ) : (
           activeConversation.messages.map(msg => (
-            <div key={msg.id} className="flex flex-col" style={{ alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: '8px' }}>
-              
-              {/* Tool Executions (before AI response) */}
+            <div
+              key={msg.id}
+              className="flex flex-col"
+              style={{
+                alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                gap: '8px',
+                width: '100%',
+                maxWidth: '780px',
+                margin: '0 auto'
+              }}
+            >
+              {/* Tool Executions */}
               {msg.role === 'assistant' && msg.toolsUsed && msg.toolsUsed.map(tool => (
                 <ToolExecutionBlock key={tool.id} tool={tool} />
               ))}
-              
-              <div 
+
+              <div
                 className="markdown-content"
-                style={{ 
-                  maxWidth: '80%',
-                  padding: msg.role === 'user' ? '12px 16px' : '0',
+                style={{
+                  maxWidth: msg.role === 'user' ? '85%' : '100%',
+                  padding: msg.role === 'user' ? '10px 16px' : '0',
                   background: msg.role === 'user' ? 'var(--bg-surface)' : 'transparent',
                   borderRadius: msg.role === 'user' ? 'var(--radius-lg)' : '0',
                   border: msg.role === 'user' ? '1px solid var(--border-subtle)' : 'none',
                   boxShadow: msg.role === 'user' ? 'var(--shadow-sm)' : 'none',
                   color: 'var(--text-primary)',
+                  fontSize: '0.925rem',
                   lineHeight: 1.6
                 }}
               >
-                {/* Extremely basic markdown rendering simulation */}
                 {msg.content.split('\n').map((line, i) => (
                   <p key={i}>{line}</p>
                 ))}
@@ -87,44 +127,61 @@ export default function ChatArea() {
 
 function ToolExecutionBlock({ tool }: { tool: ToolExecutionState }) {
   return (
-    <div style={{
-      display: 'inline-flex',
-      flexDirection: 'column',
-      padding: '12px 16px',
-      background: 'var(--bg-surface)',
-      border: '1px solid var(--border-subtle)',
-      borderRadius: 'var(--radius-md)',
-      fontSize: '0.875rem',
-      minWidth: '320px',
-      marginBottom: '8px'
-    }}>
-      <div className="flex items-center justify-between" style={{ marginBottom: tool.status === 'running' ? '0' : '12px' }}>
+    <div
+      style={{
+        display: 'inline-flex',
+        flexDirection: 'column',
+        padding: '10px 14px',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-md)',
+        fontSize: '0.825rem',
+        minWidth: '300px',
+        maxWidth: '100%',
+        marginBottom: '6px',
+        boxShadow: 'var(--shadow-sm)'
+      }}
+    >
+      <div className="flex items-center justify-between" style={{ marginBottom: tool.status === 'running' ? '0' : '8px' }}>
         <div className="flex items-center" style={{ gap: '8px' }}>
-          <div style={{ width: '12px', height: '12px', borderRadius: '50%', border: '2px solid var(--text-tertiary)', borderTopColor: tool.status === 'running' ? 'var(--accent-color)' : 'var(--text-tertiary)', animation: tool.status === 'running' ? 'spin 1s linear infinite' : 'none' }}>
-            {tool.status === 'completed' && <div style={{ width: '4px', height: '4px', background: 'var(--text-tertiary)', borderRadius: '50%', margin: '2px' }} />}
-          </div>
-          <span className="font-medium">{tool.serverName}.{tool.toolName}</span>
-        </div>
-        <span className="text-xs text-tertiary" style={{ textTransform: 'capitalize' }}>
-          {tool.status}
-        </span>
-      </div>
-      
-      {tool.status === 'completed' && tool.arguments && (
-        <div style={{ paddingLeft: '20px', color: 'var(--text-secondary)' }}>
-          <div style={{ marginBottom: '8px' }}>{JSON.stringify(tool.arguments)}</div>
-          {tool.result && (
-            <div className="flex items-center justify-between font-medium" style={{ color: 'var(--text-primary)' }}>
-              <span>Result: {JSON.stringify(tool.result)}</span>
-              <span style={{ color: 'var(--status-connected)' }}>✓</span>
-            </div>
+          {tool.status === 'running' ? (
+            <Loader2 size={13} className="animate-spin" style={{ color: 'var(--status-connecting)' }} />
+          ) : tool.status === 'completed' ? (
+            <CheckCircle2 size={13} style={{ color: 'var(--sentinel-trusted)' }} />
+          ) : (
+            <AlertCircle size={13} style={{ color: 'var(--sentinel-critical)' }} />
           )}
+          <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+            {tool.serverName}.{tool.toolName}
+          </span>
+        </div>
+
+        <div className="flex items-center" style={{ gap: '6px' }}>
+          <span className="sentinel-status-badge sentinel-status-trusted" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>
+            <ShieldCheck size={10} style={{ marginRight: '3px' }} /> Verified
+          </span>
+        </div>
+      </div>
+
+      {tool.arguments && Object.keys(tool.arguments).length > 0 && (
+        <div className="text-xs text-secondary" style={{ marginBottom: '4px', fontFamily: 'JetBrains Mono, monospace' }}>
+          <span className="text-tertiary">input: </span>
+          {JSON.stringify(tool.arguments)}
         </div>
       )}
-      
-      <style>{`
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-      `}</style>
+
+      {tool.status === 'completed' && tool.result !== undefined && (
+        <div className="text-xs" style={{ color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace', marginTop: '2px' }}>
+          <span className="text-tertiary">result: </span>
+          {typeof tool.result === 'object' ? JSON.stringify(tool.result) : String(tool.result)}
+        </div>
+      )}
+
+      {tool.error && (
+        <div className="text-xs" style={{ color: 'var(--sentinel-critical)', marginTop: '2px' }}>
+          {tool.error}
+        </div>
+      )}
     </div>
   );
 }
